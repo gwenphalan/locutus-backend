@@ -32,9 +32,9 @@ export class OpenRouter extends ModelProvider {
     }
 
     async generateText(request: GenerateTextRequest): Promise<GenerateTextResponse> {
-        const { modelId, ...options } = request;
+        const { modelId, metadata, ...options } = request;
 
-        this.logger.debug(`Generating text with model ${modelId}`);
+        this.logger.debug(`Generating text with model ${modelId}`, { metadata });
 
         const model = this.provider.chat(modelId) as unknown as Parameters<
             typeof generateText
@@ -47,18 +47,23 @@ export class OpenRouter extends ModelProvider {
 
         const { text, finishReason, usage, providerMetadata } = await generateText(aiArgs);
 
-        return {
+        const response: GenerateTextResponse = {
             text,
             finishReason,
             usage,
-            providerMetadata,
         };
+
+        if (providerMetadata !== undefined) {
+            response.providerMetadata = providerMetadata;
+        }
+
+        return response;
     }
 
     streamText(request: GenerateTextRequest): StreamTextResult {
-        const { modelId, ...options } = request;
+        const { modelId, metadata, ...options } = request;
 
-        this.logger.debug(`Streaming text with model ${modelId}`);
+        this.logger.debug(`Streaming text with model ${modelId}`, { metadata });
 
         const model = this.provider.chat(modelId) as unknown as Parameters<
             typeof streamText

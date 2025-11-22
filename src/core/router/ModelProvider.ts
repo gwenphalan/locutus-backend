@@ -25,7 +25,7 @@ export interface GenerateTextResponse {
     text: string;
     finishReason?: string;
     usage?: LanguageModelUsage;
-    providerMetadata: ProviderMetadata | undefined;
+    providerMetadata?: ProviderMetadata;
 }
 
 export interface StreamTextResult {
