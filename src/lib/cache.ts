@@ -21,7 +21,9 @@ export const cacheClient: CacheClient = {
     set: (key, value, ttlSeconds = DEFAULT_TTL_SECONDS) => cache.set(key, value, ttlSeconds),
     del: (key) => cache.del(key),
     wrap: (key, fn, ttlSeconds = DEFAULT_TTL_SECONDS) => cache.wrap(key, fn, ttlSeconds),
-    reset: () => cache.clear(),
+    reset: async () => {
+        await cache.clear();
+    },
 };
 
 export default cacheClient;
