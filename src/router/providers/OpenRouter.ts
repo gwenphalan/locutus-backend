@@ -8,78 +8,112 @@ import {
     type StreamTextResult,
 } from "../../core/router/ModelProvider.js";
 import { cacheClient } from "../../lib/cache.js";
+import { toProviderError } from "../../lib/errors.js";
 import { generateText, streamText } from "ai";
 
 export class OpenRouter extends ModelProvider {
     private readonly client: OpenRouterClient;
     private readonly provider: OpenRouterProvider;
+    private readonly apiKey: string;
 
     constructor(apiKey: string) {
         super("openrouter", "OpenRouter");
-        this.client = new OpenRouterClient({ apiKey });
-        this.provider = createOpenRouter({ apiKey });
+        this.apiKey = apiKey;
+        this.client = new OpenRouterClient({ apiKey: this.apiKey });
+        this.provider = createOpenRouter({ apiKey: this.apiKey });
     }
 
     async getModels(): Promise<string[]> {
-        return cacheClient.wrap(
-            "openrouter:models",
-            async () => {
-                const list = await this.client.models.list();
-                return list.data.map((model) => model.id);
-            },
-            300,
-        );
+        try {
+            return await cacheClient.wrap(
+                "openrouter:models",
+                async () => {
+                    const list = await this.client.models.list();
+                    const modelIds = list.data.map((model) => model.id);
+
+                    const keyInfo = await this.client.apiKeys.getCurrentKeyMetadata();
+                    const isFreeUser = keyInfo.data.isFreeTier;
+
+                    if (isFreeUser) {
+                        return modelIds.filter((modelId) => modelId.endsWith(":free"));
+                    }
+
+                    return modelIds;
+                },
+                300,
+            );
+        } catch (error) {
+            const providerError = toProviderError("openrouter", error);
+            this.logger.error("OpenRouter.getModels failed", { error: providerError });
+            throw providerError;
+        }
     }
 
     async generateText(request: GenerateTextRequest): Promise<GenerateTextResponse> {
         const { modelId, metadata, ...options } = request;
 
-        this.logger.debug(`Generating text with model ${modelId}`, { metadata });
+        try {
+            const model = this.provider.chat(modelId) as unknown as Parameters<
+                typeof generateText
+            >[0]["model"];
 
-        const model = this.provider.chat(modelId) as unknown as Parameters<
-            typeof generateText
-        >[0]["model"];
+            const aiArgs: Parameters<typeof generateText>[0] = {
+                ...(options as Parameters<typeof generateText>[0]),
+                model,
+            };
 
-        const aiArgs: Parameters<typeof generateText>[0] = {
-            ...(options as Parameters<typeof generateText>[0]),
-            model,
-        };
+            const { text, finishReason, usage, providerMetadata } = await generateText(aiArgs);
 
-        const { text, finishReason, usage, providerMetadata } = await generateText(aiArgs);
+            const response: GenerateTextResponse = {
+                text,
+                finishReason,
+                usage,
+            };
 
-        const response: GenerateTextResponse = {
-            text,
-            finishReason,
-            usage,
-        };
+            if (providerMetadata !== undefined) {
+                response.providerMetadata = providerMetadata;
+            }
 
-        if (providerMetadata !== undefined) {
-            response.providerMetadata = providerMetadata;
+            return response;
+        } catch (error) {
+            const providerError = toProviderError("openrouter", error);
+            this.logger.error("OpenRouter.generateText failed", {
+                error: providerError,
+                modelId,
+                metadata,
+            });
+            throw providerError;
         }
-
-        return response;
     }
 
     streamText(request: GenerateTextRequest): StreamTextResult {
         const { modelId, metadata, ...options } = request;
 
-        this.logger.debug(`Streaming text with model ${modelId}`, { metadata });
+        try {
+            const model = this.provider.chat(modelId) as unknown as Parameters<
+                typeof streamText
+            >[0]["model"];
 
-        const model = this.provider.chat(modelId) as unknown as Parameters<
-            typeof streamText
-        >[0]["model"];
+            const aiArgs: Parameters<typeof streamText>[0] = {
+                ...(options as Parameters<typeof streamText>[0]),
+                model,
+            };
 
-        const aiArgs: Parameters<typeof streamText>[0] = {
-            ...(options as Parameters<typeof streamText>[0]),
-            model,
-        };
+            const result = streamText(aiArgs);
 
-        const result = streamText(aiArgs);
-
-        return {
-            textStream: result.textStream,
-            text: result.text,
-            usage: result.usage,
-        };
+            return {
+                textStream: result.textStream,
+                text: result.text,
+                usage: result.usage,
+            };
+        } catch (error) {
+            const providerError = toProviderError("openrouter", error);
+            this.logger.error("OpenRouter.streamText failed", {
+                error: providerError,
+                modelId,
+                metadata,
+            });
+            throw providerError;
+        }
     }
 }
