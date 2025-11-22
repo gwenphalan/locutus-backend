@@ -25,14 +25,15 @@ export class OpenRouter extends ModelProvider {
 
     async getModels(): Promise<string[]> {
         try {
+            const keyInfo = await this.client.apiKeys.getCurrentKeyMetadata();
+            const isFreeUser = keyInfo.data.isFreeTier;
+            const tierSuffix = isFreeUser ? "free" : "paid";
+
             return await cacheClient.wrap(
-                "openrouter:models",
+                `openrouter:models:${tierSuffix}`,
                 async () => {
                     const list = await this.client.models.list();
                     const modelIds = list.data.map((model) => model.id);
-
-                    const keyInfo = await this.client.apiKeys.getCurrentKeyMetadata();
-                    const isFreeUser = keyInfo.data.isFreeTier;
 
                     if (isFreeUser) {
                         return modelIds.filter((modelId) => modelId.endsWith(":free"));
@@ -68,11 +69,8 @@ export class OpenRouter extends ModelProvider {
                 text,
                 finishReason,
                 usage,
+                ...(providerMetadata !== undefined ? { providerMetadata } : {}),
             };
-
-            if (providerMetadata !== undefined) {
-                response.providerMetadata = providerMetadata;
-            }
 
             return response;
         } catch (error) {
@@ -90,6 +88,8 @@ export class OpenRouter extends ModelProvider {
         const { modelId, metadata, ...options } = request;
 
         try {
+            const { logger } = this;
+
             const model = this.provider.chat(modelId) as unknown as Parameters<
                 typeof streamText
             >[0]["model"];
@@ -101,10 +101,54 @@ export class OpenRouter extends ModelProvider {
 
             const result = streamText(aiArgs);
 
+            const wrappedTextStream: StreamTextResult["textStream"] = (async function* () {
+                try {
+                    for await (const chunk of result.textStream) {
+                        yield chunk;
+                    }
+                } catch (error) {
+                    const providerError = toProviderError("openrouter", error);
+                    logger.error("OpenRouter.streamText failed", {
+                        error: providerError,
+                        modelId,
+                        metadata,
+                    });
+                    throw providerError;
+                }
+            })();
+
+            const wrappedText: StreamTextResult["text"] = (async () => {
+                try {
+                    return await result.text;
+                } catch (error) {
+                    const providerError = toProviderError("openrouter", error);
+                    logger.error("OpenRouter.streamText failed", {
+                        error: providerError,
+                        modelId,
+                        metadata,
+                    });
+                    throw providerError;
+                }
+            })();
+
+            const wrappedUsage: StreamTextResult["usage"] = (async () => {
+                try {
+                    return await result.usage;
+                } catch (error) {
+                    const providerError = toProviderError("openrouter", error);
+                    logger.error("OpenRouter.streamText failed", {
+                        error: providerError,
+                        modelId,
+                        metadata,
+                    });
+                    throw providerError;
+                }
+            })();
+
             return {
-                textStream: result.textStream,
-                text: result.text,
-                usage: result.usage,
+                textStream: wrappedTextStream,
+                text: wrappedText,
+                usage: wrappedUsage,
             };
         } catch (error) {
             const providerError = toProviderError("openrouter", error);
