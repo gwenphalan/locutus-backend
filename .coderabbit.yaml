@@ -1,0 +1,7 @@
+language: en-US
+reviews:
+    profile: assertive
+    auto_title_placeholder: "@TITLE"
+    high_level_summary_placeholder: "@DESCRIPTION"
+    estimate_code_review_effort: false
+    related_prs: false
