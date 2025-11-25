@@ -1,8 +1,5 @@
-import dotenv from "dotenv";
 import { env } from "./lib/config.js";
 import { makeChildLogger } from "./lib/logger.js";
-
-dotenv.config();
 
 const log = makeChildLogger("bootstrap");
 

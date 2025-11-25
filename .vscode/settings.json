@@ -13,5 +13,6 @@
     },
     "eslint.useFlatConfig": true,
     "eslint.validate": ["typescript", "javascript"],
-    "files.eol": "\n"
+    "files.eol": "\n",
+    "typescript.tsserver.experimental.enableProjectDiagnostics": false
 }
