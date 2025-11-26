@@ -8,6 +8,12 @@ const log = makeChildLogger("redis");
 let client: RedisClientType | undefined;
 let connectPromise: Promise<RedisClientType> | undefined;
 
+/**
+ * Creates and configures a new Redis client instance.
+ * Sets up event listeners for logging connection status and errors.
+ *
+ * @returns The configured Redis client.
+ */
 const createRedisClient = (): RedisClientType => {
     const redisUrl = env.REDIS_URL;
 
@@ -15,11 +21,13 @@ const createRedisClient = (): RedisClientType => {
         url: redisUrl,
     });
 
+    // Log errors to track connection issues or runtime failures
     redisClient.on("error", (error) => {
         const appError = toAppError(error);
         log.error("Redis client error", { error: appError });
     });
 
+    // Log successful connection for monitoring
     redisClient.on("connect", () => {
         log.info(`Connected to Redis at ${redisUrl}`);
     });
@@ -35,15 +43,24 @@ const createRedisClient = (): RedisClientType => {
     return redisClient;
 };
 
+/**
+ * Retrieves the singleton Redis client.
+ * Handles lazy initialization and connection management.
+ *
+ * @returns A promise that resolves to the connected Redis client.
+ */
 export const getRedisClient = async (): Promise<RedisClientType> => {
+    // Return existing client if already connected
     if (client) {
         return client;
     }
 
+    // Return pending connection promise if initialization is in progress
     if (connectPromise) {
         return connectPromise;
     }
 
+    // Initialize new client and connection promise
     client = createRedisClient();
 
     connectPromise = client
@@ -52,6 +69,7 @@ export const getRedisClient = async (): Promise<RedisClientType> => {
             return client as RedisClientType;
         })
         .catch((error) => {
+            // Cleanup on connection failure to allow retries
             const appError = toAppError(error);
             log.error("Failed to connect to Redis", { error: appError });
             client = undefined;
@@ -62,6 +80,10 @@ export const getRedisClient = async (): Promise<RedisClientType> => {
     return connectPromise;
 };
 
+/**
+ * Gracefully disconnects the Redis client.
+ * Ensures the connection is closed and resources are released.
+ */
 export const disconnectRedis = async (): Promise<void> => {
     if (!client) {
         return;
@@ -73,6 +95,7 @@ export const disconnectRedis = async (): Promise<void> => {
     } catch (error) {
         log.error("Error while closing Redis connection", { error });
     } finally {
+        // Reset singleton state to allow reconnection later
         client = undefined;
         connectPromise = undefined;
     }

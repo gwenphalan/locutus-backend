@@ -20,4 +20,8 @@ if (!parsed.success) {
     process.exit(1);
 }
 
+/**
+ * Validated environment variables.
+ * Ensures all required variables are present and correctly typed.
+ */
 export const env = parsed.data;

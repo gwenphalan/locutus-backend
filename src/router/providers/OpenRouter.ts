@@ -16,6 +16,9 @@ import type {
 import { cacheClient } from "../../lib/cache.js";
 import { toProviderError } from "../../lib/errors.js";
 
+/**
+ * Response structure for the OpenRouter credits API.
+ */
 export interface GetCreditResponse {
     data: {
         total_credits: number;
@@ -30,30 +33,48 @@ const getCreditResponseSchema = z.object({
     }),
 });
 
+/**
+ * Pricing details for an OpenRouter model.
+ * All costs are in USD.
+ */
 interface PublicPricing {
-    prompt: string; // Cost per input token in USD (e.g., "$0.0000005" = $0.50 per 1M tokens)
-    completion: string; // Cost per output token in USD (e.g., "$0.0000015" = $1.50 per 1M tokens)
-    request?: string; // Fixed cost per API request in USD
-    image?: string; // Cost per image input in USD
-    webSearch?: string; // Cost per web search operation in USD
-    internalReasoning?: string; // Cost for internal reasoning tokens in USD
-    inputCacheRead?: string; // Cost per cached input token read in USD
-    inputCacheWrite?: string; // Cost per cached input token write in USD
+    /** Cost per input token. */
+    prompt: string;
+    /** Cost per output token. */
+    completion: string;
+    /** Fixed cost per request. */
+    request?: string;
+    /** Cost per image input. */
+    image?: string;
+    /** Cost per web search. */
+    webSearch?: string;
+    /** Cost for internal reasoning tokens. */
+    internalReasoning?: string;
+    /** Cost per cached input token read. */
+    inputCacheRead?: string;
+    /** Cost per cached input token write. */
+    inputCacheWrite?: string;
 
     // Additional pricing fields
-    imageToken?: string; // Cost per image token in USD
-    imageOutput?: string; // Cost per generated image in USD
-    audio?: string; // Cost per audio processing in USD
-    inputAudioCache?: string; // Cost per cached audio input in USD
-    discount?: number; // Discount percentage as a decimal (e.g., 0.1 = 10% discount)
+    imageToken?: string;
+    imageOutput?: string;
+    audio?: string;
+    inputAudioCache?: string;
+    discount?: number;
 }
 
+/**
+ * Top provider information for a model.
+ */
 interface TopProviderInfo {
     contextLength?: number | null;
     maxCompletionTokens?: number | null;
     isModerated: boolean;
 }
 
+/**
+ * Architecture details of a model.
+ */
 interface ModelArchitecture {
     tokenizer?: string;
     instructType?: string | null;
@@ -62,6 +83,9 @@ interface ModelArchitecture {
     outputModalities: string[];
 }
 
+/**
+ * Structure of a model object returned by the OpenRouter API.
+ */
 interface OpenRouterModel {
     id: string;
     name: string;
@@ -76,6 +100,14 @@ interface OpenRouterModel {
     defaultParameters: Record<string, unknown> | null;
 }
 
+/**
+ * OpenRouter implementation of the ModelProvider.
+ * Handles model fetching, text generation, and credit tracking for OpenRouter.
+ *
+ * @remarks
+ * This class serves as the reference implementation for the `ModelProvider` abstract base class.
+ * It demonstrates how to integrate with a third-party AI provider using the Vercel AI SDK.
+ */
 export class OpenRouter extends ModelProvider {
     private readonly _client: OpenRouterClient;
     private readonly _provider: OpenRouterProvider;
@@ -92,6 +124,10 @@ export class OpenRouter extends ModelProvider {
         );
     }
 
+    /**
+     * Checks if the current API key belongs to a free tier account.
+     * Caches the result for 5 minutes to reduce API calls.
+     */
     private async _isFreeTier(): Promise<boolean> {
         return await cacheClient.wrap(
             "openrouter:key-metadata",
@@ -103,6 +139,10 @@ export class OpenRouter extends ModelProvider {
         );
     }
 
+    /**
+     * Fetches and caches the list of available models.
+     * Filters models based on the user's tier (free vs paid).
+     */
     private async _getCachedModels(): Promise<OpenRouterModel[]> {
         const isFreeUser = await this._isFreeTier();
         const tierSuffix = isFreeUser ? "free" : "paid";
@@ -113,6 +153,7 @@ export class OpenRouter extends ModelProvider {
                 const list = await this._client.models.list();
                 const data = list.data as unknown as OpenRouterModel[];
 
+                // Filter for free models if the user is on the free tier
                 if (isFreeUser) {
                     return data.filter((model) => model.id.endsWith(":free"));
                 }
@@ -123,6 +164,10 @@ export class OpenRouter extends ModelProvider {
         );
     }
 
+    /**
+     * Calculates the next midnight UTC.
+     * Used for rate limit resets.
+     */
     private _getMidnightUTC(): Date {
         const date = new Date();
         // setUTCHours(24) correctly advances to the next day's 00:00:00 UTC
@@ -130,6 +175,17 @@ export class OpenRouter extends ModelProvider {
         return date;
     }
 
+    /**
+     * Retrieves available model IDs.
+     * Handles tier-based filtering and error wrapping.
+     *
+     * @remarks
+     * Models are cached for 5 minutes to avoid hitting OpenRouter's rate limits.
+     * Free tier users only see models ending in `:free`.
+     *
+     * @returns Promise resolving to an array of model IDs.
+     * @throws {ProviderError} If the API call fails or returns invalid data.
+     */
     async getModels(): Promise<string[]> {
         try {
             const isFreeUser = await this._isFreeTier();
@@ -144,6 +200,9 @@ export class OpenRouter extends ModelProvider {
         }
     }
 
+    /**
+     * Generates text using the OpenRouter API.
+     */
     async generateText(request: GenerateTextRequest): Promise<GenerateTextResponse> {
         const { modelId, ...options } = request;
 
@@ -152,6 +211,9 @@ export class OpenRouter extends ModelProvider {
         return this._generate("openrouter", modelId, model, options);
     }
 
+    /**
+     * Streams text using the OpenRouter API.
+     */
     streamText(request: GenerateTextRequest): StreamTextResult {
         const { modelId, ...options } = request;
 
@@ -160,6 +222,9 @@ export class OpenRouter extends ModelProvider {
         return this._stream("openrouter", modelId, model, options);
     }
 
+    /**
+     * Retrieves pricing for a specific model from the cached model list.
+     */
     protected async _getModelPricing(modelId: string): Promise<ModelPricing> {
         try {
             const models = await this._getCachedModels();
@@ -182,6 +247,10 @@ export class OpenRouter extends ModelProvider {
         }
     }
 
+    /**
+     * Determines rate limits based on user tier and model type.
+     * Enforces stricter limits for free models.
+     */
     protected async _getModelRateLimits(modelId: string): Promise<ModelRateLimits> {
         const isFreeUser = await this._isFreeTier();
         const isFreeModel = modelId.endsWith(":free");
@@ -200,6 +269,13 @@ export class OpenRouter extends ModelProvider {
         return {};
     }
 
+    /**
+     * Fetches total credits purchased and total credits used from OpenRouter API.
+     * Caches the result for 5 minutes.
+     *
+     * @returns Promise resolving to the credit balance.
+     * @throws {ProviderError} If the API call fails or returns invalid data.
+     */
     protected async _getCredits(): Promise<ProviderCredits> {
         try {
             return await cacheClient.wrap<ProviderCredits>(

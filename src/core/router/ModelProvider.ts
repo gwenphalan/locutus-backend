@@ -22,27 +22,53 @@ import type {
 
 export type ModelMessageRole = "system" | "user" | "assistant" | "tool";
 
+/**
+ * Request parameters for generating text.
+ * Extends AI SDK's CallSettings and Prompt.
+ */
 export type GenerateTextRequest = CallSettings &
     Prompt & {
+        /** ID of the model to use. */
         modelId: string;
+        /** Tool definitions for function calling. */
         tools?: ToolSet;
+        /** Tool choice configuration. */
         toolChoice?: ToolChoice<ToolSet>;
+        /** Additional metadata for logging or provider-specific options. */
         metadata?: Record<string, unknown>;
     };
 
+/**
+ * Response from a text generation request.
+ */
 export interface GenerateTextResponse {
+    /** Generated text content. */
     text: string;
+    /** Reason why generation finished (e.g., "stop", "length"). */
     finishReason?: string;
+    /** Token usage statistics. */
     usage?: LanguageModelUsage;
+    /** Provider-specific metadata. */
     providerMetadata?: ProviderMetadata;
 }
 
+/**
+ * Result of a streaming text generation request.
+ * Contains both the stream and promises for final results.
+ */
 export interface StreamTextResult {
+    /** Async iterable of text chunks. */
     textStream: AsyncIterable<string>;
+    /** Promise resolving to the full generated text. */
     text: Promise<string>;
+    /** Promise resolving to the final usage statistics. */
     usage: Promise<GenerateTextResponse["usage"]>;
 }
 
+/**
+ * Abstract base class for model providers.
+ * Handles common logic like quota tracking, logging, and error standardization.
+ */
 export abstract class ModelProvider {
     protected readonly _providerId: string;
     protected readonly _logger: Logger;
@@ -53,18 +79,47 @@ export abstract class ModelProvider {
         this._logger.info(`Initialized ${label} provider`);
     }
 
+    /**
+     * Retrieves a list of available model IDs.
+     * @returns Promise resolving to an array of model IDs.
+     * @throws {ProviderError} If the provider API fails.
+     */
     abstract getModels(): Promise<string[]>;
 
+    /**
+     * Generates text for a given request.
+     * @param request - The generation request parameters.
+     * @returns Promise resolving to the generation response.
+     * @throws {ProviderError} If generation fails or rate limits are exceeded.
+     */
     abstract generateText(request: GenerateTextRequest): Promise<GenerateTextResponse>;
 
+    /**
+     * Streams text for a given request.
+     * @param request - The generation request parameters.
+     * @returns Object containing the text stream and result promises.
+     * @throws {ProviderError} If the stream cannot be initiated.
+     */
     abstract streamText(request: GenerateTextRequest): StreamTextResult;
 
+    /**
+     * Loads the current quota usage for a model from Redis.
+     *
+     * @remarks
+     * Redis keys are structured as `quota:{provider}:{model}:{window}`.
+     * The day key's TTL is used to accurately calculate the reset time, ensuring
+     * synchronization across multiple instances.
+     *
+     * @param modelId - The ID of the model to check.
+     * @returns The current quota state or null if no data exists.
+     */
     protected async _loadModelQuotaState(modelId: string): Promise<ModelQuotaState | null> {
         const encodedModelId = encodeURIComponent(modelId);
         const baseKey = `quota:${this._providerId}:${encodedModelId}`;
         const client = await getRedisClient();
 
-        // Fetch values AND the TTL for the day key to determine reset time
+        // Fetch usage counters for minute, hour, and day windows
+        // Also fetch the TTL of the day key to calculate the reset time
         const dayKey = `${baseKey}:day`;
         const multi = client.multi();
 
@@ -79,6 +134,7 @@ export abstract class ModelProvider {
             modelId,
         };
 
+        // Parse usage values, ignoring missing keys
         if (minStr) {
             const val = parseInt(minStr, 10);
             if (!isNaN(val)) state.minUsage = val;
@@ -92,7 +148,7 @@ export abstract class ModelProvider {
             if (!isNaN(val)) state.dayUsage = val;
         }
 
-        // Calculate dayReset from TTL if key exists (pttl > 0)
+        // Calculate the exact reset time based on the key's TTL
         if (dayPttl > 0) {
             state.dayReset = new Date(Date.now() + dayPttl);
         }
@@ -100,10 +156,22 @@ export abstract class ModelProvider {
         return state;
     }
 
+    /**
+     * Records a request for a model, incrementing usage counters.
+     * Enforces rate limits by setting appropriate TTLs on Redis keys.
+     *
+     * @remarks
+     * This method uses Redis multi/exec for atomicity. It calculates TTLs dynamically
+     * to ensure counters expire exactly at the end of their respective windows
+     * (minute, hour, or day).
+     *
+     * @param modelId - The ID of the model being used.
+     * @returns The updated quota state after incrementing.
+     */
     protected async _recordRequest(modelId: string): Promise<ModelQuotaState> {
         const limits = await this._getModelRateLimits(modelId);
 
-        // Optimization: If no limits configured, return empty usage
+        // Optimization: Skip Redis operations if no limits are configured
         if (!limits.dayLimit && !limits.hourLimit && !limits.minLimit) {
             return { providerId: this._providerId, modelId };
         }
@@ -115,7 +183,8 @@ export abstract class ModelProvider {
         const multi = client.multi();
         const requestTime = new Date();
 
-        // Logic: Use provider-supplied reset time if available, otherwise default to Midnight UTC
+        // Determine the reset time for the daily limit
+        // Use provider-supplied reset time if available, otherwise default to Midnight UTC
         let nextDayReset = limits.dayReset;
         if (!nextDayReset) {
             nextDayReset = new Date(requestTime);
@@ -123,6 +192,8 @@ export abstract class ModelProvider {
             nextDayReset.setUTCHours(0, 0, 0, 0);
         }
 
+        // Define time windows for rate limiting (minute, hour, day)
+        // Calculate TTLs to ensure keys expire at the end of their respective windows
         const windows = [
             {
                 type: "min",
@@ -146,6 +217,7 @@ export abstract class ModelProvider {
 
         const activeWindows = windows.filter((w) => w.limit !== undefined);
 
+        // Atomically increment counters and set TTLs for all active windows
         for (const w of activeWindows) {
             const key = `${baseKey}${w.suffix}`;
             multi.incr(key);
@@ -156,6 +228,7 @@ export abstract class ModelProvider {
 
         const state: ModelQuotaState = { providerId: this._providerId, modelId };
 
+        // Map Redis results back to the state object
         activeWindows.forEach((w, index) => {
             const count = results[index * 2] as unknown as number;
             state[`${w.type}Usage`] = count;
@@ -165,13 +238,32 @@ export abstract class ModelProvider {
         return state;
     }
 
+    /**
+     * Retrieves pricing information for a specific model.
+     * @param modelId - The model ID.
+     */
     protected abstract _getModelPricing(modelId: string): Promise<ModelPricing>;
 
+    /**
+     * Retrieves rate limits for a specific model.
+     * @param modelId - The model ID.
+     */
     protected abstract _getModelRateLimits(modelId: string): Promise<ModelRateLimits>;
 
+    /**
+     * Retrieves the current credit info for the provider.
+     */
     protected abstract _getCredits(): Promise<ProviderCredits>;
 
+    /**
+     * Aggregates all routing-related data for a model.
+     * Fetches quota, pricing, limits, and credits in parallel.
+     *
+     * @param modelId - The model ID to query.
+     * @returns A comprehensive snapshot of the model's status.
+     */
     async getRoutingSnapshot(modelId: string): Promise<ModelRoutingSnapshot> {
+        // Execute all data fetches in parallel for performance
         const [quotaState, pricing, rateLimits, credits] = await Promise.all([
             this._loadModelQuotaState(modelId),
             this._getModelPricing(modelId),
@@ -179,6 +271,7 @@ export abstract class ModelProvider {
             this._getCredits(),
         ]);
 
+        // Construct the usage snapshot from the quota state
         const usageSnapshot: ModelUsageSnapshot = {};
         if (quotaState) {
             if (quotaState.minUsage !== undefined) usageSnapshot.minUsage = quotaState.minUsage;
@@ -197,6 +290,15 @@ export abstract class ModelProvider {
         };
     }
 
+    /**
+     * Internal helper to execute a text generation request.
+     * Records usage and handles provider-specific errors.
+     *
+     * @param providerId - The provider ID.
+     * @param modelId - The model ID.
+     * @param model - The AI SDK model instance.
+     * @param options - Generation options.
+     */
     protected async _generate<TModel>(
         providerId: string,
         modelId: string,
@@ -205,6 +307,7 @@ export abstract class ModelProvider {
     ): Promise<GenerateTextResponse> {
         const { metadata, ...rest } = options;
         try {
+            // Record the request for rate limiting before calling the API
             await this._recordRequest(modelId);
 
             type GenerateArgs = Parameters<typeof generateText>[0];
@@ -225,6 +328,7 @@ export abstract class ModelProvider {
 
             return response;
         } catch (error) {
+            // Standardize and log errors
             const providerError = toProviderError(providerId, error);
             this._logger.error(`${providerId}.generateText failed`, {
                 error: providerError,
@@ -235,6 +339,15 @@ export abstract class ModelProvider {
         }
     }
 
+    /**
+     * Internal helper to execute a streaming text generation request.
+     * Records usage and wraps the stream to handle errors.
+     *
+     * @param providerId - The provider ID.
+     * @param modelId - The model ID.
+     * @param model - The AI SDK model instance.
+     * @param options - Generation options.
+     */
     protected _stream<TModel>(
         providerId: string,
         modelId: string,
@@ -252,6 +365,7 @@ export abstract class ModelProvider {
 
             const result = streamText(aiArgs);
 
+            // Helper to wrap promises with error handling
             const wrapPromise = async <T>(promise: Promise<T>): Promise<T> => {
                 try {
                     return await promise;
@@ -266,6 +380,7 @@ export abstract class ModelProvider {
                 }
             };
 
+            // Wrap the text stream to record usage and handle errors during iteration
             const wrappedTextStream: StreamTextResult["textStream"] = (async function* (
                 self: ModelProvider,
             ) {
