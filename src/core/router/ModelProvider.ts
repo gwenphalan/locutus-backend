@@ -17,6 +17,7 @@ import type {
     ModelRateLimits,
     ModelRoutingSnapshot,
     ModelUsageSnapshot,
+    ProviderCredits,
 } from "./ModelRoutingTypes.js";
 
 export type ModelMessageRole = "system" | "user" | "assistant" | "tool";
@@ -78,9 +79,18 @@ export abstract class ModelProvider {
             modelId,
         };
 
-        if (minStr) state.minUsage = parseInt(minStr, 10);
-        if (hourStr) state.hourUsage = parseInt(hourStr, 10);
-        if (dayStr) state.dayUsage = parseInt(dayStr, 10);
+        if (minStr) {
+            const val = parseInt(minStr, 10);
+            if (!isNaN(val)) state.minUsage = val;
+        }
+        if (hourStr) {
+            const val = parseInt(hourStr, 10);
+            if (!isNaN(val)) state.hourUsage = val;
+        }
+        if (dayStr) {
+            const val = parseInt(dayStr, 10);
+            if (!isNaN(val)) state.dayUsage = val;
+        }
 
         // Calculate dayReset from TTL if key exists (pttl > 0)
         if (dayPttl > 0) {
@@ -90,11 +100,7 @@ export abstract class ModelProvider {
         return state;
     }
 
-    protected async _recordRequest(
-        modelId: string,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        now: Date = new Date(),
-    ): Promise<ModelQuotaState> {
+    protected async _recordRequest(modelId: string): Promise<ModelQuotaState> {
         const limits = await this._getModelRateLimits(modelId);
 
         // Optimization: If no limits configured, return empty usage
@@ -163,11 +169,14 @@ export abstract class ModelProvider {
 
     protected abstract _getModelRateLimits(modelId: string): Promise<ModelRateLimits>;
 
+    protected abstract _getCredits(): Promise<ProviderCredits>;
+
     async getRoutingSnapshot(modelId: string): Promise<ModelRoutingSnapshot> {
-        const [quotaState, pricing, rateLimits] = await Promise.all([
+        const [quotaState, pricing, rateLimits, credits] = await Promise.all([
             this._loadModelQuotaState(modelId),
             this._getModelPricing(modelId),
             this._getModelRateLimits(modelId),
+            this._getCredits(),
         ]);
 
         const usageSnapshot: ModelUsageSnapshot = {};
@@ -181,6 +190,7 @@ export abstract class ModelProvider {
         return {
             providerId: this._providerId,
             modelId,
+            credits,
             pricing,
             rateLimits,
             usage: usageSnapshot,
@@ -195,6 +205,8 @@ export abstract class ModelProvider {
     ): Promise<GenerateTextResponse> {
         const { metadata, ...rest } = options;
         try {
+            await this._recordRequest(modelId);
+
             type GenerateArgs = Parameters<typeof generateText>[0];
 
             const aiArgs: GenerateArgs = {
@@ -254,24 +266,13 @@ export abstract class ModelProvider {
                 }
             };
 
-            const wrappedTextStream: StreamTextResult["textStream"] = (async function* () {
-                try {
-                    for await (const chunk of result.textStream) {
-                        yield chunk;
-                    }
-                } catch (error) {
-                    const providerError = toProviderError(providerId, error);
-                    // Use outer logger via `this`
-                    throw providerError;
-                }
-            })();
-
-            // Re-wrap stream errors with logger context
-            const rewrappedTextStream: StreamTextResult["textStream"] = (async function* (
+            const wrappedTextStream: StreamTextResult["textStream"] = (async function* (
                 self: ModelProvider,
             ) {
                 try {
-                    for await (const chunk of wrappedTextStream) {
+                    await self._recordRequest(modelId);
+
+                    for await (const chunk of result.textStream) {
                         yield chunk;
                     }
                 } catch (error) {
@@ -286,7 +287,7 @@ export abstract class ModelProvider {
             })(this);
 
             return {
-                textStream: rewrappedTextStream,
+                textStream: wrappedTextStream,
                 text: wrapPromise(result.text),
                 usage: wrapPromise(result.usage),
             };

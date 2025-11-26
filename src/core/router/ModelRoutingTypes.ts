@@ -33,6 +33,7 @@ export interface ModelQuotaState {
 export interface ModelRoutingSnapshot {
     providerId: string;
     modelId: string;
+    credits: ProviderCredits;
     pricing: ModelPricing;
     rateLimits: ModelRateLimits;
     usage: ModelUsageSnapshot;
