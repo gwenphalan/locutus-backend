@@ -146,9 +146,10 @@ export class OpenRouter extends ModelProvider {
     private async _getCachedModels(): Promise<OpenRouterModel[]> {
         const isFreeUser = await this._isFreeTier();
         const tierSuffix = isFreeUser ? "free" : "paid";
+        const keyPrefix = this._apiKey.slice(0, 8);
 
         return await cacheClient.wrap(
-            `openrouter:models:${tierSuffix}`,
+            `openrouter:models:${keyPrefix}:${tierSuffix}`,
             async () => {
                 const list = await this._client.models.list();
                 const data = list.data as unknown as OpenRouterModel[];
