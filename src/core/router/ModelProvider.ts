@@ -318,7 +318,7 @@ export abstract class ModelProvider {
             const result = results[index * 2];
             if (result instanceof Error) {
                 this._logger.warn(`Redis error for ${w.type} window`, { error: result, modelId });
-                return;
+                continue;
             }
             const count = result as unknown as number;
             switch (w.type) {
