@@ -3,17 +3,17 @@ import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { OpenRouter as OpenRouterClient } from "@openrouter/sdk";
 import { z } from "zod";
-import { ModelProvider } from "../core/router/ModelProvider.js";
+import { ModelProvider } from "../core/dispatcher/ModelProvider.js";
 import type {
     GenerateTextRequest,
     GenerateTextResponse,
     StreamTextResult,
-} from "../core/router/ModelProvider.js";
+} from "../core/dispatcher/ModelProvider.js";
 import type {
     ModelPricing,
     ModelRateLimits,
     ProviderCredits,
-} from "../core/router/ModelRoutingTypes.js";
+} from "../core/dispatcher/ModelRoutingTypes.js";
 import { cacheClient } from "../lib/cache.js";
 import { toProviderError } from "../lib/errors.js";
 
