@@ -222,7 +222,30 @@ export class ProviderRouter {
             throw new Error(`No providers available for model ${request.modelId}`);
         }
 
-        const route = this.decideBestRoute(candidates, config);
+        let route: RoutingResult | null = null;
+
+        if (candidates.length === 1 && candidates[0]) {
+            const candidate = candidates[0];
+            const waitMs = this.validateProvider(candidate);
+
+            if (waitMs <= config.maxQueueWaitMs) {
+                let finalWait = waitMs;
+                if (finalWait > 0) {
+                    finalWait += Math.floor(Math.random() * config.jitterMs);
+                }
+                route = {
+                    selectedCandidate: candidate,
+                    action: finalWait > 0 ? "WAIT_THEN_EXECUTE" : "EXECUTE_NOW",
+                    waitMs: finalWait,
+                };
+                this._logger.debug("Single provider optimization used", {
+                    providerId: candidate.providerId,
+                    waitMs: finalWait,
+                });
+            }
+        } else {
+            route = this.decideBestRoute(candidates, config);
+        }
 
         if (!route) {
             throw new Error(`No valid route found for model ${request.modelId} within constraints`);
@@ -284,7 +307,30 @@ export class ProviderRouter {
             throw new Error(`No providers available for model ${request.modelId}`);
         }
 
-        const route = this.decideBestRoute(candidates, config);
+        let route: RoutingResult | null = null;
+
+        if (candidates.length === 1 && candidates[0]) {
+            const candidate = candidates[0];
+            const waitMs = this.validateProvider(candidate);
+
+            if (waitMs <= config.maxQueueWaitMs) {
+                let finalWait = waitMs;
+                if (finalWait > 0) {
+                    finalWait += Math.floor(Math.random() * config.jitterMs);
+                }
+                route = {
+                    selectedCandidate: candidate,
+                    action: finalWait > 0 ? "WAIT_THEN_EXECUTE" : "EXECUTE_NOW",
+                    waitMs: finalWait,
+                };
+                this._logger.debug("Single provider optimization used", {
+                    providerId: candidate.providerId,
+                    waitMs: finalWait,
+                });
+            }
+        } else {
+            route = this.decideBestRoute(candidates, config);
+        }
 
         if (!route) {
             throw new Error(`No valid route found for model ${request.modelId} within constraints`);
