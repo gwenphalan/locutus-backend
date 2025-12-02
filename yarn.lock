@@ -562,6 +562,11 @@
     ajv-formats "^3.0.1"
     fast-uri "^3.0.0"
 
+"@fastify/autoload@^6.3.1":
+  version "6.3.1"
+  resolved "https://registry.yarnpkg.com/@fastify/autoload/-/autoload-6.3.1.tgz#a0cd54a82e71be9456f80611ff8e9beefd7b84ed"
+  integrity sha512-0fsG+lO3m5yEZVjXKpltCe+2eHhM6rfAPQhvlGUgLUFTw/N2wA9WqPTObMtrF3oUCUrxbSDv60HlUIoh+aFM1A==
+
 "@fastify/error@^4.0.0":
   version "4.2.0"
   resolved "https://registry.yarnpkg.com/@fastify/error/-/error-4.2.0.tgz#d40f46ba75f541fdcc4dc276b7308bbc8e8e6d7a"
@@ -1836,6 +1841,11 @@ fast-uri@^3.0.0, fast-uri@^3.0.1:
   version "3.1.0"
   resolved "https://registry.yarnpkg.com/fast-uri/-/fast-uri-3.1.0.tgz#66eecff6c764c0df9b762e62ca7edcfb53b4edfa"
   integrity sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==
+
+fastify-winston@^2.0.2:
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/fastify-winston/-/fastify-winston-2.0.2.tgz#ae224c763bbc5d11b6606feb14fa02e102cadf6c"
+  integrity sha512-ooldBPR2iQ+w8Q1lYYZqMijBPx7q9SdGSuQIKkQIA259bhIGl7Zoo3asUTzCTBxn+VXakoZKQT9A90xzHjFBKg==
 
 fastify@^5.6.2:
   version "5.6.2"

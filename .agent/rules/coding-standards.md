@@ -1,5 +1,5 @@
 ---
-trigger: model_decision
+trigger: always_on
 description: When planning a new feature, writing TypeScript code, or refactoring.
 ---
 

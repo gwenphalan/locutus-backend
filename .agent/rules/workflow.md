@@ -1,5 +1,5 @@
 ---
-trigger: model_decision
+trigger: always_on
 description: When running terminal commands, building the project, or debugging errors.
 ---
 

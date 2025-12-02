@@ -1,5 +1,5 @@
 ---
-trigger: model_decision
+trigger: always_on
 description: When generating git commit messages, creating branches, or managing pull requests.
 ---
 
