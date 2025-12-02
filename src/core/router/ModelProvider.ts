@@ -316,8 +316,18 @@ export abstract class ModelProvider {
         // Map Redis results back to the state object
         activeWindows.forEach((w, index) => {
             const count = results[index * 2] as unknown as number;
-            state[`${w.type}Usage`] = count;
-            if (w.type === "day") state.dayReset = nextDayReset;
+            switch (w.type) {
+                case "min":
+                    state.minUsage = count;
+                    break;
+                case "hour":
+                    state.hourUsage = count;
+                    break;
+                case "day":
+                    state.dayUsage = count;
+                    state.dayReset = nextDayReset;
+                    break;
+            }
         });
 
         return state;
