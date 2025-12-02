@@ -86,6 +86,16 @@ export const getRedisClient = async (): Promise<RedisClientType> => {
  * Ensures the connection is closed and resources are released.
  */
 export const disconnectRedis = async (): Promise<void> => {
+    // Wait for any pending connection to complete before disconnecting
+    if (connectPromise) {
+        try {
+            await connectPromise;
+        } catch {
+            // Connection failed, nothing to disconnect
+            return;
+        }
+    }
+
     if (!client) {
         return;
     }
