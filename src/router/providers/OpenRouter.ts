@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { OpenRouter as OpenRouterClient } from "@openrouter/sdk";
@@ -125,12 +126,28 @@ export class OpenRouter extends ModelProvider {
     }
 
     /**
+     * Generates a short hash of the API key for use in cache keys.
+     * This prevents cache collisions between different API keys.
+     */
+    private _getApiKeyHash(): string {
+        return createHash("sha256").update(this._apiKey).digest("hex").slice(0, 8);
+    }
+
+    /**
+     * Returns the prefix for all cache keys for this provider instance.
+     * Includes the provider name and the API key hash.
+     */
+    private get _cacheKeyPrefix(): string {
+        return `openrouter:${this._getApiKeyHash()}`;
+    }
+
+    /**
      * Checks if the current API key belongs to a free tier account.
      * Caches the result for 5 minutes to reduce API calls.
      */
     private async _isFreeTier(): Promise<boolean> {
         return await cacheClient.wrap(
-            "openrouter:key-metadata",
+            `${this._cacheKeyPrefix}:key-metadata`,
             async () => {
                 const keyInfo = await this._client.apiKeys.getCurrentKeyMetadata();
                 return keyInfo.data.isFreeTier;
@@ -149,7 +166,7 @@ export class OpenRouter extends ModelProvider {
         const keyPrefix = this._apiKey.slice(0, 8);
 
         return await cacheClient.wrap(
-            `openrouter:models:${keyPrefix}:${tierSuffix}`,
+            `${this._cacheKeyPrefix}:models:${tierSuffix}`,
             async () => {
                 const list = await this._client.models.list();
                 const data = list.data as unknown as OpenRouterModel[];
@@ -285,7 +302,7 @@ export class OpenRouter extends ModelProvider {
     protected async _getCredits(): Promise<ProviderCredits> {
         try {
             return await cacheClient.wrap<ProviderCredits>(
-                "openrouter:credits",
+                `${this._cacheKeyPrefix}:credits`,
                 async () => {
                     const response = await fetch("https://openrouter.ai/api/v1/credits", {
                         headers: {
