@@ -151,10 +151,7 @@ export abstract class ModelProvider {
                         };
                     }
                     // Simple heuristic: versions are usually small (< 100), dates/context are large
-                    if (
-                        parseInt(val, 10) < 100 &&
-                        !modelName.toLowerCase().includes(`${val}b`)
-                    ) {
+                    if (parseInt(val, 10) < 100 && !modelName.toLowerCase().includes(`${val}b`)) {
                         version = val;
                     }
                 }
