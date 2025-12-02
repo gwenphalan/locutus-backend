@@ -38,15 +38,15 @@ type RoutingResult = {
  * Orchestrates model requests by routing them to the optimal provider.
  * Handles rate limiting, cost optimization, and load balancing across registered providers.
  */
-export class ProviderRouter {
+export class ModelDispatcher {
     protected readonly _logger: Logger;
     private readonly _tokenizer: Tiktoken;
 
     private _providers: { [key: string]: ModelProvider } = {};
     constructor() {
-        this._logger = makeChildLogger("ProviderRouter");
+        this._logger = makeChildLogger("ModelDispatcher");
         this._tokenizer = getEncoding("cl100k_base");
-        this._logger.info("ProviderRouter initialized");
+        this._logger.info("ModelDispatcher initialized");
     }
 
     /**
