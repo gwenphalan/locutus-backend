@@ -140,7 +140,10 @@ export abstract class ModelProvider {
                 if (intMatch) {
                     const val = intMatch[1];
                     // Simple heuristic: versions are usually small (< 100), dates/context are large
-                    if (parseInt(val ?? "0") < 100 && !modelName.toLowerCase().includes(`${val}b`)) {
+                    if (
+                        parseInt(val ?? "0") < 100 &&
+                        !modelName.toLowerCase().includes(`${val}b`)
+                    ) {
                         version = val;
                     }
                 }
@@ -205,14 +208,13 @@ export abstract class ModelProvider {
         }
         const values = results[0];
         const dayPttl = results[1];
-        
+
         if (values instanceof Error || dayPttl instanceof Error) {
             this._logger.warn("Redis error in multi result", { modelId, results });
             return { providerId: this.providerId, modelId };
         }
-        
-        const [minStr, hourStr, dayStr] = (values as Array<string | null> | null) ?? [];
-        const [minStr, hourStr, dayStr] = values ?? [];
+
+        const [minStr, hourStr, dayStr] = (values as unknown as (string | null)[]) ?? [];
 
         this._logger.debug("Loaded raw quota state", { modelId, minStr, hourStr, dayStr, dayPttl });
 
@@ -236,9 +238,16 @@ export abstract class ModelProvider {
         }
 
         // Calculate the exact reset time based on the key's TTL
-        if (dayPttl > 0) {
-            state.dayReset = new Date(Date.now() + dayPttl);
+        // dayPttl: -2 = key missing, -1 = no expiry, >= 0 = ms until expiry
+        const pttl = Number(dayPttl);
+        if (pttl >= 0) {
+            state.dayReset = new Date(Date.now() + pttl);
+        } else if (pttl === -1) {
+            // Key exists but has no expiry.
+            // We can either set it to "never" or just leave it undefined.
+            // Leaving it undefined implies no known reset time.
         }
+        // If pttl === -2, key doesn't exist, so no reset time needed (usage is 0)
 
         return state;
     }
@@ -255,7 +264,7 @@ export abstract class ModelProvider {
      * @param modelId - The ID of the model being used.
      * @returns The updated quota state after incrementing.
      */
-    protected async _recordRequest(modelId: string): Promise<ModelQuotaState> {
+    public async recordRequest(modelId: string): Promise<ModelQuotaState> {
         const limits = await this._getModelRateLimits(modelId);
 
         // Optimization: Skip Redis operations if no limits are configured
@@ -437,7 +446,7 @@ export abstract class ModelProvider {
         const { metadata, ...rest } = options;
         try {
             // Record the request for rate limiting before calling the API
-            await this._recordRequest(modelId);
+            // Usage recording is now handled by the router to prevent race conditions
 
             type GenerateArgs = Parameters<typeof generateText>[0];
 
@@ -514,7 +523,7 @@ export abstract class ModelProvider {
                 self: ModelProvider,
             ) {
                 try {
-                    await self._recordRequest(modelId);
+                    // Usage recording is now handled by the router to prevent race conditions
 
                     for await (const chunk of result.textStream) {
                         yield chunk;

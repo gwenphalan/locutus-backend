@@ -10,7 +10,10 @@ const envSchema = z.object({
         .enum(["error", "warn", "info", "http", "verbose", "debug", "silly"])
         .default("info"),
     OPENROUTER_API_KEY: z.string().default(""),
-    REDIS_URL: z.string().url().default("redis://:devpassword@localhost:6379"),
+    REDIS_URL: z
+        .string()
+        .url()
+        .default(`redis://:${process.env.REDIS_PASSWORD || "devpassword"}@localhost:6379`),
 });
 
 const parsed = envSchema.safeParse(process.env);

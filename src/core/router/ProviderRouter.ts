@@ -279,6 +279,10 @@ export class ProviderRouter {
             throw new Error(`Selected provider ${route.selectedCandidate.providerId} not found`);
         }
 
+        // Record request usage here to prevent race condition
+        // The provider's generate/stream methods no longer record usage automatically
+        await selectedProvider.recordRequest(request.modelId);
+
         return selectedProvider;
     }
 
