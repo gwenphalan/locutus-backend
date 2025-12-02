@@ -189,6 +189,100 @@ export class ProviderRouter {
     }
 
     /**
+     * Common logic to resolve the best provider for a request.
+     * Handles snapshot gathering, filtering, decision making, waiting, and re-validation.
+     */
+    private async _resolveRoute(
+        request: GenerateTextRequest,
+        config: RouterConfig,
+        methodName: string,
+    ): Promise<ModelProvider> {
+        this._logger.info(`Router.${methodName} called`, { modelId: request.modelId });
+        // Gather snapshots from all providers
+        const snapshotPromises = Object.values(this._providers).map(async (provider) => {
+            try {
+                return await provider.getRoutingSnapshot(request.modelId);
+            } catch (error) {
+                this._logger.warn(`Failed to get snapshot from ${provider.providerId}`, {
+                    error,
+                    modelId: request.modelId,
+                });
+                return null;
+            }
+        });
+
+        const results = await Promise.all(snapshotPromises);
+        const candidates = results.filter((s): s is ModelRoutingSnapshot => s !== null);
+
+        if (candidates.length === 0) {
+            throw new Error(`No providers available for model ${request.modelId}`);
+        }
+
+        let route: RoutingResult | null = null;
+
+        if (candidates.length === 1 && candidates[0]) {
+            const candidate = candidates[0];
+            const waitMs = this.validateProvider(candidate);
+
+            if (waitMs <= config.maxQueueWaitMs) {
+                let finalWait = waitMs;
+                if (finalWait > 0) {
+                    finalWait += Math.floor(Math.random() * config.jitterMs);
+                }
+                route = {
+                    selectedCandidate: candidate,
+                    action: finalWait > 0 ? "WAIT_THEN_EXECUTE" : "EXECUTE_NOW",
+                    waitMs: finalWait,
+                };
+                this._logger.debug("Single provider optimization used", {
+                    providerId: candidate.providerId,
+                    waitMs: finalWait,
+                });
+            }
+        } else {
+            route = this.decideBestRoute(candidates, config);
+        }
+
+        if (!route) {
+            throw new Error(`No valid route found for model ${request.modelId} within constraints`);
+        }
+
+        if (route.action === "WAIT_THEN_EXECUTE" && route.waitMs > 0) {
+            this._logger.info("Router selected provider (wait)", {
+                providerId: route.selectedCandidate.providerId,
+                action: route.action,
+                waitMs: route.waitMs,
+            });
+            this._logger.info(
+                `Waiting ${route.waitMs}ms before executing ${methodName} on ${route.selectedCandidate.providerId}`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, route.waitMs));
+
+            // Re-validate to prevent race condition
+            const freshSnapshot = await this._providers[
+                route.selectedCandidate.providerId
+            ]?.getRoutingSnapshot(request.modelId);
+            if (freshSnapshot && this.validateProvider(freshSnapshot) > 0) {
+                throw new Error(
+                    `Provider ${route.selectedCandidate.providerId} became unavailable after wait`,
+                );
+            }
+        } else {
+            this._logger.info("Router selected provider (immediate)", {
+                providerId: route.selectedCandidate.providerId,
+                action: route.action,
+            });
+        }
+
+        const selectedProvider = this._providers[route.selectedCandidate.providerId];
+        if (!selectedProvider) {
+            throw new Error(`Selected provider ${route.selectedCandidate.providerId} not found`);
+        }
+
+        return selectedProvider;
+    }
+
+    /**
      * Generates text using the best available provider.
      * Gathers snapshots from all providers, decides the best route, and executes the request.
      *
@@ -201,79 +295,8 @@ export class ProviderRouter {
         request: GenerateTextRequest,
         config: RouterConfig,
     ): Promise<GenerateTextResponse> {
-        this._logger.info("Router.generate called", { modelId: request.modelId });
-        // Gather snapshots from all providers
-        const snapshotPromises = Object.values(this._providers).map(async (provider) => {
-            try {
-                return await provider.getRoutingSnapshot(request.modelId);
-            } catch (error) {
-                this._logger.warn(`Failed to get snapshot from ${provider.providerId}`, {
-                    error,
-                    modelId: request.modelId,
-                });
-                return null;
-            }
-        });
-
-        const results = await Promise.all(snapshotPromises);
-        const candidates = results.filter((s): s is ModelRoutingSnapshot => s !== null);
-
-        if (candidates.length === 0) {
-            throw new Error(`No providers available for model ${request.modelId}`);
-        }
-
-        let route: RoutingResult | null = null;
-
-        if (candidates.length === 1 && candidates[0]) {
-            const candidate = candidates[0];
-            const waitMs = this.validateProvider(candidate);
-
-            if (waitMs <= config.maxQueueWaitMs) {
-                let finalWait = waitMs;
-                if (finalWait > 0) {
-                    finalWait += Math.floor(Math.random() * config.jitterMs);
-                }
-                route = {
-                    selectedCandidate: candidate,
-                    action: finalWait > 0 ? "WAIT_THEN_EXECUTE" : "EXECUTE_NOW",
-                    waitMs: finalWait,
-                };
-                this._logger.debug("Single provider optimization used", {
-                    providerId: candidate.providerId,
-                    waitMs: finalWait,
-                });
-            }
-        } else {
-            route = this.decideBestRoute(candidates, config);
-        }
-
-        if (!route) {
-            throw new Error(`No valid route found for model ${request.modelId} within constraints`);
-        }
-
-        if (route.action === "WAIT_THEN_EXECUTE" && route.waitMs > 0) {
-            this._logger.info("Router selected provider (wait)", {
-                providerId: route.selectedCandidate.providerId,
-                action: route.action,
-                waitMs: route.waitMs,
-            });
-            this._logger.info(
-                `Waiting ${route.waitMs}ms before executing request on ${route.selectedCandidate.providerId}`,
-            );
-            await new Promise((resolve) => setTimeout(resolve, route.waitMs));
-        } else {
-            this._logger.info("Router selected provider (immediate)", {
-                providerId: route.selectedCandidate.providerId,
-                action: route.action,
-            });
-        }
-
-        const selectedProvider = this._providers[route.selectedCandidate.providerId];
-        if (!selectedProvider) {
-            throw new Error(`Selected provider ${route.selectedCandidate.providerId} not found`);
-        }
-
-        return selectedProvider.generateText(request);
+        const provider = await this._resolveRoute(request, config, "generate");
+        return provider.generateText(request);
     }
 
     /**
@@ -286,79 +309,8 @@ export class ProviderRouter {
      * @throws {Error} If no providers are available or no valid route is found.
      */
     async stream(request: GenerateTextRequest, config: RouterConfig): Promise<StreamTextResult> {
-        this._logger.info("Router.stream called", { modelId: request.modelId });
-        // Gather snapshots from all providers
-        const snapshotPromises = Object.values(this._providers).map(async (provider) => {
-            try {
-                return await provider.getRoutingSnapshot(request.modelId);
-            } catch (error) {
-                this._logger.warn(`Failed to get snapshot from ${provider.providerId}`, {
-                    error,
-                    modelId: request.modelId,
-                });
-                return null;
-            }
-        });
-
-        const results = await Promise.all(snapshotPromises);
-        const candidates = results.filter((s): s is ModelRoutingSnapshot => s !== null);
-
-        if (candidates.length === 0) {
-            throw new Error(`No providers available for model ${request.modelId}`);
-        }
-
-        let route: RoutingResult | null = null;
-
-        if (candidates.length === 1 && candidates[0]) {
-            const candidate = candidates[0];
-            const waitMs = this.validateProvider(candidate);
-
-            if (waitMs <= config.maxQueueWaitMs) {
-                let finalWait = waitMs;
-                if (finalWait > 0) {
-                    finalWait += Math.floor(Math.random() * config.jitterMs);
-                }
-                route = {
-                    selectedCandidate: candidate,
-                    action: finalWait > 0 ? "WAIT_THEN_EXECUTE" : "EXECUTE_NOW",
-                    waitMs: finalWait,
-                };
-                this._logger.debug("Single provider optimization used", {
-                    providerId: candidate.providerId,
-                    waitMs: finalWait,
-                });
-            }
-        } else {
-            route = this.decideBestRoute(candidates, config);
-        }
-
-        if (!route) {
-            throw new Error(`No valid route found for model ${request.modelId} within constraints`);
-        }
-
-        if (route.action === "WAIT_THEN_EXECUTE" && route.waitMs > 0) {
-            this._logger.info("Router selected provider (wait)", {
-                providerId: route.selectedCandidate.providerId,
-                action: route.action,
-                waitMs: route.waitMs,
-            });
-            this._logger.info(
-                `Waiting ${route.waitMs}ms before executing stream on ${route.selectedCandidate.providerId}`,
-            );
-            await new Promise((resolve) => setTimeout(resolve, route.waitMs));
-        } else {
-            this._logger.info("Router selected provider (immediate)", {
-                providerId: route.selectedCandidate.providerId,
-                action: route.action,
-            });
-        }
-
-        const selectedProvider = this._providers[route.selectedCandidate.providerId];
-        if (!selectedProvider) {
-            throw new Error(`Selected provider ${route.selectedCandidate.providerId} not found`);
-        }
-
-        return selectedProvider.streamText(request);
+        const provider = await this._resolveRoute(request, config, "stream");
+        return provider.streamText(request);
     }
 
     get providers() {

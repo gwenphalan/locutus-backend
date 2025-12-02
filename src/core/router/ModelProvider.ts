@@ -315,7 +315,12 @@ export abstract class ModelProvider {
 
         // Map Redis results back to the state object
         activeWindows.forEach((w, index) => {
-            const count = results[index * 2] as unknown as number;
+            const result = results[index * 2];
+            if (result instanceof Error) {
+                this._logger.warn(`Redis error for ${w.type} window`, { error: result, modelId });
+                return;
+            }
+            const count = result as unknown as number;
             switch (w.type) {
                 case "min":
                     state.minUsage = count;
