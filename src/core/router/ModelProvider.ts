@@ -203,8 +203,15 @@ export abstract class ModelProvider {
             this._logger.warn("Unexpected Redis multi result", { modelId, results });
             return { providerId: this.providerId, modelId };
         }
-        const values = results[0] as unknown as Array<string | null> | null;
-        const dayPttl = results[1] as unknown as number;
+        const values = results[0];
+        const dayPttl = results[1];
+        
+        if (values instanceof Error || dayPttl instanceof Error) {
+            this._logger.warn("Redis error in multi result", { modelId, results });
+            return { providerId: this.providerId, modelId };
+        }
+        
+        const [minStr, hourStr, dayStr] = (values as Array<string | null> | null) ?? [];
         const [minStr, hourStr, dayStr] = values ?? [];
 
         this._logger.debug("Loaded raw quota state", { modelId, minStr, hourStr, dayStr, dayPttl });
