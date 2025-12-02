@@ -238,9 +238,9 @@ export class OpenRouter extends ModelProvider {
 
             const p = model.pricing;
             const pricing = {
-                pricePer1kInputTokens: parseFloat(p.prompt) * 1000,
-                pricePer1kOutputTokens: parseFloat(p.completion) * 1000,
-                pricePerRequest: p.request ? parseFloat(p.request) : 0,
+                pricePer1kInputTokens: parseFloat(p.prompt) * 1000 || 0,
+                pricePer1kOutputTokens: parseFloat(p.completion) * 1000 || 0,
+                pricePerRequest: p.request ? (parseFloat(p.request) || 0) : 0,
                 isFreeTier: model.id.endsWith(":free"),
             };
             this._logger.debug("Parsed model pricing", { modelId, pricing });
