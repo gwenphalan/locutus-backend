@@ -1,4 +1,5 @@
 import winston from "winston";
+import { env } from "./config.js";
 
 const dim = (text: string) => `\x1b[90m${text}\x1b[0m`;
 
@@ -28,7 +29,7 @@ const baseFormat = winston.format.combine(
  * Log level is determined by the LOG_LEVEL environment variable.
  */
 export const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || "info",
+    level: env.LOG_LEVEL,
     format: baseFormat,
     transports: [
         new winston.transports.Console({

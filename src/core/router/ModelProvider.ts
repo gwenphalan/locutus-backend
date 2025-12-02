@@ -18,6 +18,7 @@ import type {
     ModelRoutingSnapshot,
     ModelUsageSnapshot,
     ProviderCredits,
+    ParsedModelId,
 } from "./ModelRoutingTypes.js";
 
 export type ModelMessageRole = "system" | "user" | "assistant" | "tool";
@@ -70,11 +71,11 @@ export interface StreamTextResult {
  * Handles common logic like quota tracking, logging, and error standardization.
  */
 export abstract class ModelProvider {
-    protected readonly _providerId: string;
+    readonly providerId: string;
     protected readonly _logger: Logger;
 
     protected constructor(providerId: string, label: string) {
-        this._providerId = providerId;
+        this.providerId = providerId;
         this._logger = makeChildLogger(label);
         this._logger.info(`Initialized ${label} provider`);
     }
@@ -85,6 +86,77 @@ export abstract class ModelProvider {
      * @throws {ProviderError} If the provider API fails.
      */
     abstract getModels(): Promise<string[]>;
+
+    /**
+     * Parses a model ID into a structured format.
+     * Handles IDs with or without provider prefixes.
+     * Extracts :free suffix, version numbers, and parameter counts.
+     *
+     * @param modelId - The raw model ID string.
+     * @returns The parsed model ID structure.
+     */
+    static parseModelId(modelId: string): ParsedModelId {
+        const parts = modelId.split("/");
+        let provider: string = "unknown";
+        let rest = modelId;
+
+        if (parts.length >= 2) {
+            provider = parts[0] ?? "unknown";
+            rest = parts.slice(1).join("/");
+        }
+
+        // Handle suffixes like :free
+        const suffixParts = rest.split(":");
+        const modelName = suffixParts[0] || rest; // Fallback to rest if empty
+        const variant = suffixParts.length > 1 ? suffixParts[1] : undefined;
+        const isFree = variant === "free";
+
+        // Extract parameter count (e.g., "7b", "32b", "405b")
+        // Looks for digits followed by 'b' surrounded by non-word chars or start/end
+        const paramMatch = modelName.match(/(?:^|-|_|\b)(\d+b)(?:$|-|_|\b)/i);
+        const parameterCount = paramMatch ? paramMatch[1]?.toLowerCase() : undefined;
+
+        // Extract version
+        // Strategies:
+        // 1. "v" followed by version (v2, v2.1)
+        // 2. "r" followed by version (r1) - common in deepseek
+        // 3. Explicit version numbers (3.5, 4.1)
+        // 4. Single digits that are likely versions (gpt-4, claude-3), avoiding param counts
+        let version: string | undefined;
+
+        const vMatch = modelName.match(/(?:^|-)(?:v|r)(\d+(?:\.\d+)*)(?:$|-)/i);
+        if (vMatch) {
+            version = vMatch[1];
+        } else {
+            // Look for floating point versions (4.5, 3.5)
+            const floatMatch = modelName.match(/(?:^|-)(\d+\.\d+)(?:$|-)/);
+            if (floatMatch) {
+                version = floatMatch[1];
+            } else {
+                // Look for single integer versions, but be careful not to match "32b" or dates "2024"
+                // We exclude matches that are immediately followed by 'b' (handled by param check)
+                // We also try to avoid large numbers which might be dates or context lengths
+                const intMatch = modelName.match(/(?:^|-)(\d+)(?:$|-)/);
+                if (intMatch) {
+                    const val = intMatch[1];
+                    // Simple heuristic: versions are usually small (< 100), dates/context are large
+                    if (parseInt(val ?? "") < 100 && !modelName.match(new RegExp(`${val}b`, "i"))) {
+                        version = val;
+                    }
+                }
+            }
+        }
+
+        return {
+            provider,
+            model: modelName,
+            ...(variant ? { variant } : {}),
+            ...(version ? { version } : {}),
+            ...(parameterCount ? { parameterCount } : {}),
+            isFree,
+            originalId: modelId,
+        };
+    }
 
     /**
      * Generates text for a given request.
@@ -115,7 +187,7 @@ export abstract class ModelProvider {
      */
     protected async _loadModelQuotaState(modelId: string): Promise<ModelQuotaState | null> {
         const encodedModelId = encodeURIComponent(modelId);
-        const baseKey = `quota:${this._providerId}:${encodedModelId}`;
+        const baseKey = `quota:${this.providerId}:${encodedModelId}`;
         const client = await getRedisClient();
 
         // Fetch usage counters for minute, hour, and day windows
@@ -129,8 +201,10 @@ export abstract class ModelProvider {
         const [values, dayPttl] = (await multi.exec()) as unknown as [Array<string | null>, number];
         const [minStr, hourStr, dayStr] = values;
 
+        this._logger.debug("Loaded raw quota state", { modelId, minStr, hourStr, dayStr, dayPttl });
+
         const state: ModelQuotaState = {
-            providerId: this._providerId,
+            providerId: this.providerId,
             modelId,
         };
 
@@ -173,11 +247,11 @@ export abstract class ModelProvider {
 
         // Optimization: Skip Redis operations if no limits are configured
         if (!limits.dayLimit && !limits.hourLimit && !limits.minLimit) {
-            return { providerId: this._providerId, modelId };
+            return { providerId: this.providerId, modelId };
         }
 
         const encodedModelId = encodeURIComponent(modelId);
-        const baseKey = `quota:${this._providerId}:${encodedModelId}`;
+        const baseKey = `quota:${this.providerId}:${encodedModelId}`;
         const client = await getRedisClient();
 
         const multi = client.multi();
@@ -215,6 +289,11 @@ export abstract class ModelProvider {
             },
         ] as const;
 
+        this._logger.debug("Calculated rate limit windows", {
+            modelId,
+            windows: windows.map((w) => ({ type: w.type, limit: w.limit, ttl: w.ttl })),
+        });
+
         const activeWindows = windows.filter((w) => w.limit !== undefined);
 
         // Atomically increment counters and set TTLs for all active windows
@@ -226,7 +305,7 @@ export abstract class ModelProvider {
 
         const results = await multi.exec();
 
-        const state: ModelQuotaState = { providerId: this._providerId, modelId };
+        const state: ModelQuotaState = { providerId: this.providerId, modelId };
 
         // Map Redis results back to the state object
         activeWindows.forEach((w, index) => {
@@ -271,6 +350,14 @@ export abstract class ModelProvider {
             this._getCredits(),
         ]);
 
+        this._logger.debug("Routing snapshot components fetched", {
+            modelId,
+            quota: quotaState,
+            pricing,
+            limits: rateLimits,
+            credits,
+        });
+
         // Construct the usage snapshot from the quota state
         const usageSnapshot: ModelUsageSnapshot = {};
         if (quotaState) {
@@ -281,12 +368,25 @@ export abstract class ModelProvider {
         }
 
         return {
-            providerId: this._providerId,
-            modelId,
-            credits,
-            pricing,
-            rateLimits,
-            usage: usageSnapshot,
+            id: modelId,
+            providerId: this.providerId,
+
+            // Cost
+            isFree: pricing.isFreeTier,
+            // costEstimate is undefined by default
+
+            // Minute
+            minUsage: quotaState?.minUsage,
+            minLimit: rateLimits.minLimit,
+
+            // Hour
+            hourUsage: quotaState?.hourUsage,
+            hourLimit: rateLimits.hourLimit,
+
+            // Day
+            dayUsage: quotaState?.dayUsage,
+            dayLimit: rateLimits.dayLimit,
+            dayReset: quotaState?.dayReset ?? rateLimits.dayReset,
         };
     }
 

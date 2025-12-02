@@ -61,12 +61,23 @@ export interface ModelQuotaState {
  * Includes credits, pricing, rate limits, and current usage.
  */
 export interface ModelRoutingSnapshot {
-    providerId: string;
-    modelId: string;
-    credits: ProviderCredits;
-    pricing: ModelPricing;
-    rateLimits: ModelRateLimits;
-    usage: ModelUsageSnapshot;
+    id: string; // Corresponds to modelId
+    providerId: string; // Kept for context
+
+    // Cost Vectors
+    isFree?: boolean | undefined;
+    costEstimate?: number | undefined; // Optional, calculated externally if needed
+
+    // Usage Vectors (Current Usage / Limit)
+    minUsage?: number | undefined;
+    minLimit?: number | undefined;
+
+    hourUsage?: number | undefined;
+    hourLimit?: number | undefined;
+
+    dayUsage?: number | undefined;
+    dayLimit?: number | undefined;
+    dayReset?: Date | undefined;
 }
 
 /**
@@ -78,4 +89,21 @@ export interface ProviderCredits {
     totalCredits: number;
     /** Total credits used so far. */
     totalUsage: number;
+}
+
+/**
+ * Structure for a parsed model ID.
+ */
+export interface ParsedModelId {
+    provider: string;
+    model: string;
+    /** The specific variant or suffix, e.g., "free", "extended" */
+    variant?: string;
+    /** Extracted version string if present, e.g., "3.5", "4", "v2" */
+    version?: string;
+    /** Extracted parameter count if present, e.g., "7b", "70b" */
+    parameterCount?: string;
+    /** Whether this is explicitly a free model variant */
+    isFree: boolean;
+    originalId: string;
 }

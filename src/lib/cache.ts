@@ -1,4 +1,7 @@
 import { createCache, type Cache } from "cache-manager";
+import { makeChildLogger } from "./logger.js";
+
+const log = makeChildLogger("cache");
 
 /**
  * Represents types that can be stored in the cache.
@@ -67,10 +70,30 @@ const cache: Cache = createCache({
  * The default TTL is 60 seconds.
  */
 export const cacheClient: CacheClient = {
-    get: (key) => cache.get(key),
-    set: (key, value, ttlSeconds = DEFAULT_TTL_SECONDS) => cache.set(key, value, ttlSeconds),
+    get: async <T = Cacheable>(key: string) => {
+        const val = await cache.get(key);
+        if (val) {
+            log.debug("Cache hit", { key });
+        } else {
+            log.debug("Cache miss", { key });
+        }
+        return val as T | undefined;
+    },
+    set: async (key, value, ttlSeconds = DEFAULT_TTL_SECONDS) => {
+        log.debug("Cache set", { key, ttlSeconds });
+        return cache.set(key, value, ttlSeconds);
+    },
     del: (key) => cache.del(key),
-    wrap: (key, fn, ttlSeconds = DEFAULT_TTL_SECONDS) => cache.wrap(key, fn, ttlSeconds),
+    wrap: async (key, fn, ttlSeconds = DEFAULT_TTL_SECONDS) => {
+        return cache.wrap(
+            key,
+            async () => {
+                log.debug("Cache wrap miss - executing factory", { key });
+                return fn();
+            },
+            ttlSeconds,
+        );
+    },
     reset: async () => {
         await cache.clear();
     },

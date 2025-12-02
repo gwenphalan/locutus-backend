@@ -192,6 +192,7 @@ export class OpenRouter extends ModelProvider {
             this._logger.debug(`OpenRouter user is on ${isFreeUser ? "free" : "paid"} tier`);
 
             const models = await this._getCachedModels();
+            this._logger.debug(`Fetched ${models.length} models from OpenRouter`);
             return models.map((m: OpenRouterModel) => m.id);
         } catch (error) {
             const providerError = toProviderError("openrouter", error);
@@ -235,12 +236,14 @@ export class OpenRouter extends ModelProvider {
             }
 
             const p = model.pricing;
-            return {
+            const pricing = {
                 pricePer1kInputTokens: parseFloat(p.prompt) * 1000,
                 pricePer1kOutputTokens: parseFloat(p.completion) * 1000,
                 pricePerRequest: p.request ? parseFloat(p.request) : 0,
                 isFreeTier: model.id.endsWith(":free"),
             };
+            this._logger.debug("Parsed model pricing", { modelId, pricing });
+            return pricing;
         } catch (error) {
             this._logger.warn(`Failed to get pricing for ${modelId}`, { error });
             return {};
@@ -258,11 +261,13 @@ export class OpenRouter extends ModelProvider {
 
         if (isFreeModel) {
             // Paid user using free model: 20 RPM, 1000 RPD
-            return {
+            const limits = {
                 minLimit: 20,
                 dayLimit: isFreeUser ? 50 : 1000,
                 dayReset: nextMidnight,
             };
+            this._logger.debug("Applied free model limits", { modelId, isFreeUser, limits });
+            return limits;
         }
 
         // Paid user using paid model: No limits

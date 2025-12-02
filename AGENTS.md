@@ -1,5 +1,9 @@
 # AGENTS — locutus-backend
 
+## Planning Conventions
+
+- All plans should have code snippets for all code changes, and file references.
+
 ## Repository Conventions
 
 - Use **yarn** for all package operations; backend is written in **TypeScript**.
@@ -10,6 +14,34 @@
 - Logging: `src/lib/logger.ts` (winston with child loggers per subsystem).
 - Caching: `src/lib/cache.ts` (cache-manager, default TTL 60s).
 - Lint/format: ESLint (flat config) + Prettier, 4-space indentation, Husky + lint-staged on commit.
+
+## Development Workflow & Commands
+
+We use **yarn** for all operations. Do not use `npm` or `npx` directly unless necessary.
+
+### Core Commands
+
+- **Build**: `yarn build`
+    - Uses `tsup` to compile TypeScript to ESM in `dist/`.
+    - Always run this to verify the build output, not `tsc`.
+- **Typecheck**: `yarn typecheck`
+    - Uses `tsc --noEmit` to check for type errors without emitting files.
+    - Run this to ensure type safety.
+- **Dev Server**: `yarn dev`
+    - Uses `tsx` to watch and run `src/index.ts`.
+- **Start Production**: `yarn start`
+    - Runs the built code from `dist/index.js`.
+- **Lint & Format**: `yarn lint` / `yarn format`
+    - Standard linting and formatting.
+
+### Workflow
+
+1.  **Development**: Use `yarn dev` for fast feedback loop.
+2.  **Verification**:
+    - Run `yarn typecheck` to catch type errors.
+    - Run `yarn build` to ensure the project builds correctly with `tsup`.
+    - Run `yarn lint` to check for style issues.
+3.  **Commit**: Husky will automatically run lint and format on staged files.
 
 ## Git Conventions
 

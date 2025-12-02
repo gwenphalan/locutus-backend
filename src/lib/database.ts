@@ -52,6 +52,7 @@ const createRedisClient = (): RedisClientType => {
 export const getRedisClient = async (): Promise<RedisClientType> => {
     // Return existing client if already connected
     if (client) {
+        log.debug("Reusing existing Redis client");
         return client;
     }
 
