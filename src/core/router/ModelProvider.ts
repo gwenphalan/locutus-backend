@@ -140,7 +140,7 @@ export abstract class ModelProvider {
                 if (intMatch) {
                     const val = intMatch[1];
                     // Simple heuristic: versions are usually small (< 100), dates/context are large
-                    if (parseInt(val ?? "") < 100 && !modelName.toLowerCase().includes(`${val}b`)) {
+                    if (parseInt(val ?? "0") < 100 && !modelName.toLowerCase().includes(`${val}b`)) {
                         version = val;
                     }
                 }
