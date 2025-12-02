@@ -198,8 +198,14 @@ export abstract class ModelProvider {
         multi.mGet([`${baseKey}:minute`, `${baseKey}:hour`, dayKey]);
         multi.pTTL(dayKey); // Get TTL in milliseconds
 
-        const [values, dayPttl] = (await multi.exec()) as unknown as [Array<string | null>, number];
-        const [minStr, hourStr, dayStr] = values;
+        const results = await multi.exec();
+        if (!results || results.length < 2) {
+            this._logger.warn("Unexpected Redis multi result", { modelId, results });
+            return { providerId: this.providerId, modelId };
+        }
+        const values = results[0] as Array<string | null> | null;
+        const dayPttl = results[1] as number;
+        const [minStr, hourStr, dayStr] = values ?? [];
 
         this._logger.debug("Loaded raw quota state", { modelId, minStr, hourStr, dayStr, dayPttl });
 
