@@ -1,3 +1,4 @@
+import { getEncoding, type Tiktoken } from "js-tiktoken";
 import { makeChildLogger } from "../../lib/logger.js";
 import type {
     ModelProvider,
@@ -39,10 +40,12 @@ type RoutingResult = {
  */
 export class ProviderRouter {
     protected readonly _logger: Logger;
+    private readonly _tokenizer: Tiktoken;
 
     private _providers: { [key: string]: ModelProvider } = {};
     constructor() {
         this._logger = makeChildLogger("ProviderRouter");
+        this._tokenizer = getEncoding("cl100k_base");
         this._logger.info("ProviderRouter initialized");
     }
 
@@ -189,6 +192,33 @@ export class ProviderRouter {
     }
 
     /**
+     * Estimates the number of tokens in a request using cl100k_base encoding.
+     *
+     * @param request - The generation request.
+     * @returns Estimated token count.
+     */
+    private _estimateTokenCount(request: GenerateTextRequest): number {
+        let content = "";
+        if (request.prompt && typeof request.prompt === "string") {
+            content += request.prompt;
+        }
+        if (request.messages) {
+            for (const m of request.messages) {
+                if (typeof m.content === "string") {
+                    content += m.content;
+                } else if (Array.isArray(m.content)) {
+                    for (const part of m.content) {
+                        if (part.type === "text") {
+                            content += part.text;
+                        }
+                    }
+                }
+            }
+        }
+        return this._tokenizer.encode(content).length;
+    }
+
+    /**
      * Common logic to resolve the best provider for a request.
      * Handles snapshot gathering, filtering, decision making, waiting, and re-validation.
      */
@@ -198,10 +228,19 @@ export class ProviderRouter {
         methodName: string,
     ): Promise<ModelProvider> {
         this._logger.info(`Router.${methodName} called`, { modelId: request.modelId });
+
+        const estimatedInputTokens = this._estimateTokenCount(request);
+        // Use maxTokens if available, otherwise default to 200 (a reasonable average for chat)
+        const estimatedOutputTokens = request.maxTokens ?? 200;
+
         // Gather snapshots from all providers
         const snapshotPromises = Object.values(this._providers).map(async (provider) => {
             try {
-                return await provider.getRoutingSnapshot(request.modelId);
+                return await provider.getRoutingSnapshot(
+                    request.modelId,
+                    estimatedInputTokens,
+                    estimatedOutputTokens,
+                );
             } catch (error) {
                 this._logger.warn(`Failed to get snapshot from ${provider.providerId}`, {
                     error,
@@ -261,7 +300,7 @@ export class ProviderRouter {
             // Re-validate to prevent race condition
             const freshSnapshot = await this._providers[
                 route.selectedCandidate.providerId
-            ]?.getRoutingSnapshot(request.modelId);
+            ]?.getRoutingSnapshot(request.modelId, estimatedInputTokens, estimatedOutputTokens);
             if (freshSnapshot && this.validateProvider(freshSnapshot) > 0) {
                 throw new Error(
                     `Provider ${route.selectedCandidate.providerId} became unavailable after wait`,

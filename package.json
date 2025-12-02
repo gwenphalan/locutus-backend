@@ -58,6 +58,7 @@
         "ai": "^5.0.98",
         "cache-manager": "^7.2.5",
         "dotenv": "^17.2.3",
+        "js-tiktoken": "^1.0.21",
         "redis": "^5.10.0",
         "vitest": "^4.0.14",
         "winston": "^3.18.3",

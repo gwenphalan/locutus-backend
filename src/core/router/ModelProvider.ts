@@ -35,6 +35,8 @@ export type GenerateTextRequest = CallSettings &
         tools?: ToolSet;
         /** Tool choice configuration. */
         toolChoice?: ToolChoice<ToolSet>;
+        /** Maximum number of tokens to generate. */
+        maxTokens?: number;
         /** Additional metadata for logging or provider-specific options. */
         metadata?: Record<string, unknown>;
     };
@@ -385,9 +387,15 @@ export abstract class ModelProvider {
      * Fetches quota, pricing, limits, and credits in parallel.
      *
      * @param modelId - The model ID to query.
+     * @param estimatedInputTokens - Estimated number of input tokens for cost calculation.
+     * @param estimatedOutputTokens - Estimated number of output tokens for cost calculation.
      * @returns A comprehensive snapshot of the model's status.
      */
-    async getRoutingSnapshot(modelId: string): Promise<ModelRoutingSnapshot> {
+    async getRoutingSnapshot(
+        modelId: string,
+        estimatedInputTokens: number = 0,
+        estimatedOutputTokens: number = 0,
+    ): Promise<ModelRoutingSnapshot> {
         // Execute all data fetches in parallel for performance
         const [quotaState, pricing, rateLimits, credits] = await Promise.all([
             this._loadModelQuotaState(modelId),
@@ -413,13 +421,20 @@ export abstract class ModelProvider {
             if (quotaState.dayReset !== undefined) usageSnapshot.dayReset = quotaState.dayReset;
         }
 
+        // Calculate Cost Estimate
+        // Pricing is usually per 1k tokens, so we divide by 1000
+        const inputCost = ((pricing.pricePer1kInputTokens ?? 0) / 1000) * estimatedInputTokens;
+        const outputCost = ((pricing.pricePer1kOutputTokens ?? 0) / 1000) * estimatedOutputTokens;
+        const requestCost = pricing.pricePerRequest ?? 0;
+        const totalCost = inputCost + outputCost + requestCost;
+
         return {
             id: modelId,
             providerId: this.providerId,
 
             // Cost
             isFree: pricing.isFreeTier,
-            // costEstimate is undefined by default
+            costEstimate: totalCost,
 
             // Minute
             minUsage: quotaState?.minUsage,
