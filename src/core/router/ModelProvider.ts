@@ -139,9 +139,20 @@ export abstract class ModelProvider {
                 const intMatch = modelName.match(/(?:^|-)(\d+)(?:$|-)/);
                 if (intMatch) {
                     const val = intMatch[1];
+                    if (!val) {
+                        return {
+                            provider,
+                            model: modelName,
+                            ...(variant ? { variant } : {}),
+                            ...(version ? { version } : {}),
+                            ...(parameterCount ? { parameterCount } : {}),
+                            isFree,
+                            originalId: modelId,
+                        };
+                    }
                     // Simple heuristic: versions are usually small (< 100), dates/context are large
                     if (
-                        parseInt(val ?? "0") < 100 &&
+                        parseInt(val, 10) < 100 &&
                         !modelName.toLowerCase().includes(`${val}b`)
                     ) {
                         version = val;
