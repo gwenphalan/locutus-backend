@@ -9,7 +9,7 @@ const envSchema = z.object({
     LOG_LEVEL: z
         .enum(["error", "warn", "info", "http", "verbose", "debug", "silly"])
         .default("info"),
-    OPENROUTER_API_KEY: z.string().min(1, "OPENROUTER_API_KEY is required"),
+    OPENROUTER_API_KEY: z.string().default(""),
     REDIS_URL: z.string().url().default("redis://:devpassword@localhost:6379"),
 });
 
