@@ -163,7 +163,6 @@ export class OpenRouter extends ModelProvider {
     private async _getCachedModels(): Promise<OpenRouterModel[]> {
         const isFreeUser = await this._isFreeTier();
         const tierSuffix = isFreeUser ? "free" : "paid";
-        const keyPrefix = this._apiKey.slice(0, 8);
 
         return await cacheClient.wrap(
             `${this._cacheKeyPrefix}:models:${tierSuffix}`,
@@ -257,7 +256,7 @@ export class OpenRouter extends ModelProvider {
             const pricing = {
                 pricePer1kInputTokens: parseFloat(p.prompt) * 1000 || 0,
                 pricePer1kOutputTokens: parseFloat(p.completion) * 1000 || 0,
-                pricePerRequest: p.request ? (parseFloat(p.request) || 0) : 0,
+                pricePerRequest: p.request ? parseFloat(p.request) || 0 : 0,
                 isFreeTier: model.id.endsWith(":free"),
             };
             this._logger.debug("Parsed model pricing", { modelId, pricing });
