@@ -203,8 +203,8 @@ export abstract class ModelProvider {
             this._logger.warn("Unexpected Redis multi result", { modelId, results });
             return { providerId: this.providerId, modelId };
         }
-        const values = results[0] as Array<string | null> | null;
-        const dayPttl = results[1] as number;
+        const values = results[0] as unknown as Array<string | null> | null;
+        const dayPttl = results[1] as unknown as number;
         const [minStr, hourStr, dayStr] = values ?? [];
 
         this._logger.debug("Loaded raw quota state", { modelId, minStr, hourStr, dayStr, dayPttl });
@@ -314,7 +314,8 @@ export abstract class ModelProvider {
         const state: ModelQuotaState = { providerId: this.providerId, modelId };
 
         // Map Redis results back to the state object
-        activeWindows.forEach((w, index) => {
+        // Map Redis results back to the state object
+        for (const [index, w] of activeWindows.entries()) {
             const result = results[index * 2];
             if (result instanceof Error) {
                 this._logger.warn(`Redis error for ${w.type} window`, { error: result, modelId });
@@ -333,7 +334,7 @@ export abstract class ModelProvider {
                     state.dayReset = nextDayReset;
                     break;
             }
-        });
+        }
 
         return state;
     }

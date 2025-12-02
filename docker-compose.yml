@@ -13,7 +13,7 @@ services:
             resources:
                 limits:
                     memory: 256M
-                    cpus: '0.5'
+                    cpus: "0.5"
         healthcheck:
             test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-devpassword}", "ping"]
             interval: 5s
