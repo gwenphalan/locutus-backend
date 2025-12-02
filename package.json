@@ -20,7 +20,7 @@
         "lint:staged": "lint-staged",
         "prepare": "husky install",
         "db:up": "docker compose up -d redis",
-        "db:down": "docker compose down",
+        "db:down": "docker compose stop redis && docker compose rm -f redis",
         "clean": "rm -rf dist/"
     },
     "lint-staged": {
