@@ -17,7 +17,7 @@
 
 ## Development Workflow & Commands
 
-We use **yarn** for all operations. Do not use `npm` or `npx` directly unless necessary.
+We use **yarn** for all operations. Do not use `npm` or `npx`.
 
 ### Core Commands
 
@@ -37,10 +37,10 @@ We use **yarn** for all operations. Do not use `npm` or `npx` directly unless ne
 ### Workflow
 
 1.  **Development**: Use `yarn dev` for fast feedback loop.
-2.  **Verification**:
-    - Run `yarn typecheck` to catch type errors.
-    - Run `yarn build` to ensure the project builds correctly with `tsup`.
-    - Run `yarn lint` to check for style issues.
+2.  **Verification**: Before finishing a task, you MUST run:
+    - `yarn typecheck` to catch type errors.
+    - `yarn build` to ensure the project builds correctly with `tsup`.
+    - `yarn lint` to check for style issues.
 3.  **Commit**: Husky will automatically run lint and format on staged files.
 
 ## Git Conventions
@@ -50,7 +50,7 @@ We use **yarn** for all operations. Do not use `npm` or `npx` directly unless ne
 - Use short-lived feature branches: `feature/<name>` for features, `fix/<name>` for bug fixes, `chore/<name>` for maintenance.
 - Keep branches focused on a single concern.
 - Open a PR early if you want feedback; mark as draft until ready.
-- Rebase onto `main` before merging; avoid merge commits unless required.
+- Rebase onto `main` before merging; avoid merge commits.
 - Keep PRs small and coherent; large changes should be split.
 
 ### Commit Message Guidelines
@@ -59,6 +59,7 @@ We use **yarn** for all operations. Do not use `npm` or `npx` directly unless ne
   **\<type\>: concise action statement**  
   Types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`.
 - First line ≤ 72 chars; use imperative mood (“add X”, “fix Y”).
+- No trailing periods on the first line.
 - Optional body for context or rationale; wrap at ~80 chars.
 - Reference issues or PRs when relevant.
 
