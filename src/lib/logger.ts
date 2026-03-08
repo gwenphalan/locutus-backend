@@ -7,6 +7,8 @@ const dim = (text: string) => `\x1b[90m${text}\x1b[0m`;
  * Custom log format combining timestamp, level, label, and message.
  * Handles both string and object messages, and properly formats metadata.
  */
+import util from "util";
+
 const baseFormat = winston.format.combine(
     winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
     winston.format.printf(({ level, message, timestamp, label, ...meta }) => {
@@ -14,7 +16,10 @@ const baseFormat = winston.format.combine(
         const lvl = typeof level === "string" ? level : "";
         const scope = typeof label === "string" && label.length ? ` [${label}]` : "";
         const msg = typeof message === "string" ? message : JSON.stringify(message, null, 2);
-        const metaJson = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : "";
+        const metaJson =
+            Object.keys(meta).length > 0
+                ? ` ${util.inspect(meta, { colors: true, depth: null, breakLength: Infinity })}`
+                : "";
 
         const tsPart = ts ? dim(ts) : "";
         const scopePart = scope ? dim(scope) : "";

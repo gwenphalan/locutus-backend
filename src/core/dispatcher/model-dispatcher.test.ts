@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProviderRouter } from "./ProviderRouter";
-import type { ModelRoutingSnapshot } from "./ModelRoutingTypes";
+import { ModelDispatcher } from "./model-dispatcher";
+import type { ModelRoutingSnapshot } from "./model-routing-types";
 
-describe("ProviderRouter", () => {
-    let router: ProviderRouter;
+describe("ModelDispatcher", () => {
+    let router: ModelDispatcher;
 
     beforeEach(() => {
-        router = new ProviderRouter();
+        router = new ModelDispatcher();
         vi.useFakeTimers();
     });
 

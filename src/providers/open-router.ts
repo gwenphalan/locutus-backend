@@ -3,19 +3,19 @@ import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { OpenRouter as OpenRouterClient } from "@openrouter/sdk";
 import { z } from "zod";
-import { ModelProvider } from "../../core/router/ModelProvider.js";
+import { ModelProvider } from "../core/dispatcher/model-provider.js";
 import type {
     GenerateTextRequest,
     GenerateTextResponse,
     StreamTextResult,
-} from "../../core/router/ModelProvider.js";
+} from "../core/dispatcher/model-provider.js";
 import type {
     ModelPricing,
     ModelRateLimits,
     ProviderCredits,
-} from "../../core/router/ModelRoutingTypes.js";
-import { cacheClient } from "../../lib/cache.js";
-import { toProviderError } from "../../lib/errors.js";
+} from "../core/dispatcher/model-routing-types.js";
+import { cacheClient } from "../lib/cache.js";
+import { toProviderError } from "../lib/errors.js";
 
 /**
  * Response structure for the OpenRouter credits API.
