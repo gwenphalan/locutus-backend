@@ -65,7 +65,7 @@
         "fastify-winston": "^2.0.2",
         "js-tiktoken": "^1.0.21",
         "redis": "^5.10.0",
-        "vitest": "^4.0.14",
+    "vitest": "^4.0.14",
         "winston": "^3.18.3",
         "zod": "^4.1.12"
     }
