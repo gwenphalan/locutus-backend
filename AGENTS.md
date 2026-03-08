@@ -12,7 +12,7 @@ The codebase is being modernized from a legacy setup to the target stack above. 
 
 | Area            | Legacy (being replaced)      | Target                                               |
 | --------------- | ---------------------------- | ---------------------------------------------------- |
-| Package manager | pnpm                         | pnpm                                                 |
+| Package manager | yarn                         | pnpm                                                 |
 | Logging         | Winston + `makeChildLogger`  | Pino (built-in Fastify logger)                       |
 | Redis           | `redis` package (raw client) | ioredis with Fastify plugin                          |
 | Cache           | cache-manager (in-memory)    | Redis-backed cache middleware                        |
