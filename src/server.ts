@@ -12,14 +12,14 @@ import { logger } from "./lib/logger.js";
  * resource cleanup.
  */
 const registerShutdownHandlers = (app: AppInstance): void => {
-    let _isShuttingDown = false;
+    let isShuttingDown = false;
 
     const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
-        if (_isShuttingDown) {
+        if (isShuttingDown) {
             return;
         }
 
-        _isShuttingDown = true;
+        isShuttingDown = true;
         app.log.info({ signal }, "Received shutdown signal");
 
         try {

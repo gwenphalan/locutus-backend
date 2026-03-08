@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ModelDispatcher } from "./ModelDispatcher";
-import type { ModelRoutingSnapshot } from "./ModelRoutingTypes";
+import { ModelDispatcher } from "./model-dispatcher";
+import type { ModelRoutingSnapshot } from "./model-routing-types";
 
 describe("ModelDispatcher", () => {
     let router: ModelDispatcher;

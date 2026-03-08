@@ -5,10 +5,9 @@ import type {
     GenerateTextRequest,
     GenerateTextResponse,
     StreamTextResult,
-} from "./ModelProvider.js";
+} from "./model-provider.js";
 import type { Logger } from "winston";
-
-import type { ModelRoutingSnapshot } from "./ModelRoutingTypes.js";
+import type { ModelRoutingSnapshot } from "./model-routing-types.js";
 
 /**
  * Configuration for the router's tolerance and behavior.

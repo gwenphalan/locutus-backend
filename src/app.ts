@@ -1,11 +1,11 @@
 import Fastify from "fastify";
 import fastifyWinston from "fastify-winston";
-import { ModelDispatcher } from "./core/dispatcher/ModelDispatcher.js";
+import { ModelDispatcher } from "./core/dispatcher/model-dispatcher.js";
 import { env } from "./lib/config.js";
 import { disconnectRedis } from "./lib/database.js";
 import { toAppError } from "./lib/errors.js";
 import { makeChildLogger } from "./lib/logger.js";
-import { OpenRouter } from "./providers/OpenRouter.js";
+import { OpenRouter } from "./providers/open-router.js";
 import healthRoute from "./routes/health.js";
 
 declare module "fastify" {

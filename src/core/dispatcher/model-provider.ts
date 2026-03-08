@@ -10,7 +10,7 @@ import type {
 import type { Logger } from "winston";
 import { makeChildLogger } from "../../lib/logger.js";
 import { toProviderError } from "../../lib/errors.js";
-import { type ModelQuotaState } from "./ModelRoutingTypes.js";
+import { type ModelQuotaState } from "./model-routing-types.js";
 import { getRedisClient } from "../../lib/database.js";
 import type {
     ModelPricing,
@@ -19,7 +19,7 @@ import type {
     ModelUsageSnapshot,
     ProviderCredits,
     ParsedModelId,
-} from "./ModelRoutingTypes.js";
+} from "./model-routing-types.js";
 
 export type ModelMessageRole = "system" | "user" | "assistant" | "tool";
 
