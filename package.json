@@ -7,6 +7,7 @@
     "repository": "https://github.com/gwenphalan/locutus-backend.git",
     "author": "Gwen Phalan <gwen.phalan@gmail.com>",
     "license": "MIT",
+    "packageManager": "pnpm@10.30.3",
     "scripts": {
         "dev": "tsx watch src/index.ts",
         "build": "tsup src --format esm --dts --clean",
@@ -19,7 +20,7 @@
         "format": "prettier . --write",
         "format:check": "prettier . --check",
         "lint:staged": "lint-staged",
-        "prepare": "husky install",
+        "prepare": "husky",
         "db:up": "docker compose up -d redis",
         "db:down": "docker compose stop redis && docker compose rm -f redis",
         "clean": "rm -rf dist/"

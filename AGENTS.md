@@ -12,7 +12,7 @@ The codebase is being modernized from a legacy setup to the target stack above. 
 
 | Area            | Legacy (being replaced)      | Target                                               |
 | --------------- | ---------------------------- | ---------------------------------------------------- |
-| Package manager | yarn                         | pnpm                                                 |
+| Package manager | pnpm                         | pnpm                                                 |
 | Logging         | Winston + `makeChildLogger`  | Pino (built-in Fastify logger)                       |
 | Redis           | `redis` package (raw client) | ioredis with Fastify plugin                          |
 | Cache           | cache-manager (in-memory)    | Redis-backed cache middleware                        |
@@ -27,19 +27,17 @@ If a module still uses the legacy pattern, migrate it to the target when touchin
 
 ## Build and run
 
-> **Note:** Until LOC-28 (yarn → pnpm migration) is complete, use `yarn` for all commands. After that issue merges, switch to `pnpm`.
-
 ```bash
-# Current (pre-migration)
-yarn install              # Install dependencies
-yarn dev                  # Start dev server (tsx watch src/index.ts)
-yarn build                # Compile via tsup
-yarn start                # Run compiled output
-yarn typecheck            # Type-check without emitting
-yarn lint                 # ESLint (flat config)
-yarn lint:fix             # Auto-fix lint issues
-yarn format               # Prettier format
-yarn format:check         # Prettier check (CI)
+# Current
+pnpm install              # Install dependencies
+pnpm dev                  # Start dev server (tsx watch src/index.ts)
+pnpm build                # Compile via tsup
+pnpm start                # Run compiled output
+pnpm typecheck            # Type-check without emitting
+pnpm lint                 # ESLint (flat config)
+pnpm lint:fix             # Auto-fix lint issues
+pnpm format               # Prettier format
+pnpm format:check         # Prettier check (CI)
 
 # Target (post-migration)
 pnpm install              # Install dependencies
@@ -54,9 +52,9 @@ docker compose up -d      # Start full stack (app, Redis, Keycloak)
 Before committing, run all three in order:
 
 ```bash
-yarn typecheck            # Catches type errors tsx ignores
-yarn build                # Ensures build compatibility
-yarn lint                 # Ensures style compliance
+pnpm typecheck            # Catches type errors tsx ignores
+pnpm build                # Ensures build compatibility
+pnpm lint                 # Ensures style compliance
 ```
 
 All three must pass. Husky pre-commit hooks enforce lint-staged (prettier + eslint) and commitlint automatically.
@@ -64,8 +62,8 @@ All three must pass. Husky pre-commit hooks enforce lint-staged (prettier + esli
 ## Testing
 
 ```bash
-yarn test                 # Run all tests (Vitest)
-yarn test -- --watch      # Watch mode
+pnpm test                 # Run all tests (Vitest)
+pnpm test -- --watch      # Watch mode
 ```
 
 Always run tests before committing. One unit test exists: `src/core/dispatcher/ModelDispatcher.test.ts`. Integration test infrastructure is planned (LOC-27).
@@ -255,7 +253,7 @@ All generated plans must include **code snippets** for all proposed changes and 
 | ----------- | ------------------------- | ------------------------------- |
 | `feature/`  | New functionality         | `feature/LOC-15-openai-api`     |
 | `fix/`      | Bug fixes                 | `fix/LOC-32-auth-token-expiry`  |
-| `chore/`    | Maintenance, deps, config | `chore/LOC-28-yarn-to-pnpm`     |
+| `chore/`    | Maintenance, deps, config | `chore/LOC-28-pnpm-migration`   |
 | `refactor/` | Code restructuring        | `refactor/LOC-18-app-factory`   |
 | `docs/`     | Documentation only        | `docs/LOC-29-agents-md-rewrite` |
 

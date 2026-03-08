@@ -21,22 +21,27 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: ${{ matrix.node-version }}
-                  cache: "yarn"
+                  cache: "pnpm"
+
+            - name: Enable pnpm
+              run: |
+                  corepack enable
+                  corepack prepare pnpm@10.30.3 --activate
 
             - name: Install dependencies
-              run: yarn install --frozen-lockfile
+              run: pnpm install --frozen-lockfile
 
             - name: Lint
-              run: yarn lint
+              run: pnpm lint
 
             - name: Format Check
-              run: yarn format:check
+              run: pnpm format:check
 
             - name: Typecheck
-              run: yarn typecheck
+              run: pnpm typecheck
 
             - name: Run Tests
-              run: yarn test
+              run: pnpm test
 
             - name: Build
-              run: yarn build
+              run: pnpm build
